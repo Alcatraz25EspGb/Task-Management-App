@@ -1,0 +1,67 @@
+# -----------------------
+# Maven build output
+# -----------------------
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Maven release plugin files
+release.properties
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+
+# IDE Files
+# VS Code
+.vscode/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# NetBeans
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# -----------------------
+# SQLite Database
+# -----------------------
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# If your schema is in /database/schema.sql, keep it:
+!database/schema.sql
+
+# -----------------------
+# Logs / Temp files
+# -----------------------
+*.log
+*.tmp
+*.bak
+
+# -----------------------
+# Node modules (in case you ever add tooling)
+# -----------------------
+node_modules/
+
+# -----------------------
+# Environment / secrets
+# -----------------------
+.env
+*.env
