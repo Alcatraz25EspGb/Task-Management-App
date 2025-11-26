@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Task Management System - Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="css/globals.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+</head>
+<body class="dashboard-body">
+  <div class="dashboard-shell">
+    <!-- HEADER -->
+    <header class="dashboard-header">
+      <div class="header-left">
+        <!-- Blue circle + white tick, matching favicon -->
+        <div class="header-icon" aria-hidden="true">✓</div>
+        <div class="header-text">
+          <h1>Task Management System</h1>
+          <p id="header-subtitle">Welcome back</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <span id="role-badge" class="role-badge">Role</span>
+
+        <div class="notifications-wrapper">
+          <button
+            id="notifications-button"
+            class="icon-button notifications-button"
+            type="button"
+            title="Notifications"
+          >
+            🔔
+            <span id="notifications-count" class="notifications-count hidden">0</span>
+          </button>
+
+          <div
+            id="notifications-dropdown"
+            class="notifications-dropdown hidden"
+            aria-label="Notifications"
+          >
+            <div id="notifications-empty" class="notifications-empty">
+              You have no notifications.
+            </div>
+            <div id="notifications-list" class="notifications-list"></div>
+          </div>
+        </div>
+
+        <button id="logout-button" class="logout-button">Log out</button>
+      </div>
+    </header>
+
+    <!-- SUMMARY TILES -->
+    <section class="summary-grid" aria-label="Task summary">
+      <article class="summary-card summary-total">
+        <div class="summary-header-row">
+          <div class="summary-label-wrap">
+            <span class="accent-dot"></span>
+            <span class="summary-label">Total Tasks</span>
+          </div>
+          <div class="summary-icon icon-total"></div>
+        </div>
+        <div id="summary-total" class="summary-value">0</div>
+      </article>
+
+      <article class="summary-card summary-due-today">
+        <div class="summary-header-row">
+          <div class="summary-label-wrap">
+            <span class="accent-dot"></span>
+            <span class="summary-label">Due Today</span>
+          </div>
+          <div class="summary-icon icon-due-today"></div>
+        </div>
+        <div id="summary-due-today" class="summary-value">0</div>
+      </article>
+
+      <article class="summary-card summary-in-progress">
+        <div class="summary-header-row">
+          <div class="summary-label-wrap">
+            <span class="accent-dot"></span>
+            <span class="summary-label">In Progress</span>
+          </div>
+          <div class="summary-icon icon-in-progress"></div>
+        </div>
+        <div id="summary-in-progress" class="summary-value">0</div>
+      </article>
+
+      <article class="summary-card summary-done">
+        <div class="summary-header-row">
+          <div class="summary-label-wrap">
+            <span class="accent-dot"></span>
+            <span class="summary-label">Completed</span>
+          </div>
+          <div class="summary-icon icon-completed"></div>
+        </div>
+        <div id="summary-done" class="summary-value">0</div>
+      </article>
+
+      <article class="summary-card summary-overdue">
+        <div class="summary-header-row">
+          <div class="summary-label-wrap">
+            <span class="accent-dot"></span>
+            <span class="summary-label">Overdue</span>
+          </div>
+          <div class="summary-icon icon-overdue"></div>
+        </div>
+        <div id="summary-overdue" class="summary-value">0</div>
+      </article>
+    </section>
+
+    <!-- TOOLBAR -->
+    <section class="toolbar-row">
+      <div class="tab-buttons" role="tablist" aria-label="View mode">
+        <button
+          id="list-tab-button"
+          class="tab-button active"
+          type="button"
+          role="tab"
+          aria-selected="true"
+        >
+          <span class="tab-icon tab-icon-list" aria-hidden="true"></span>
+          List View
+        </button>
+        <button
+          id="calendar-tab-button"
+          class="tab-button"
+          type="button"
+          role="tab"
+          aria-selected="false"
+        >
+          <span class="tab-icon tab-icon-calendar" aria-hidden="true"></span>
+          Calendar View
+        </button>
+      </div>
+
+      <button id="create-task-button" class="primary-button" type="button">
+        + Create Task
+      </button>
+    </section>
+
+    <!-- FILTERS -->
+    <section class="card filters-card">
+      <div class="filters-grid">
+        <select id="filter-status">
+          <option value="">All statuses</option>
+          <option value="TODO">To do</option>
+          <option value="IN_PROGRESS">In progress</option>
+          <option value="DONE">Done</option>
+        </select>
+        <select id="filter-category">
+          <option value="">All categories</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="one-time">One-time</option>
+        </select>
+        <select id="filter-priority">
+          <option value="">All priorities</option>
+          <option value="1">1 - Low</option>
+          <option value="2">2</option>
+          <option value="3">3 - Medium</option>
+          <option value="4">4</option>
+          <option value="5">5 - High</option>
+        </select>
+        <select id="filter-mine">
+          <option value="">All tasks</option>
+          <option value="assigned">Assigned to me</option>
+          <option value="created">Created by me</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- TAB CONTENT: LIST VIEW -->
+    <section id="list-tab-content" class="tab-content active">
+      <div id="task-list" class="task-list" aria-live="polite"></div>
+      <div id="task-list-empty" class="empty-state hidden">
+        No tasks match your filters.
+      </div>
+    </section>
+
+    <!-- TAB CONTENT: CALENDAR VIEW -->
+    <section id="calendar-tab-content" class="tab-content">
+      <div class="card calendar-card">
+        <div class="calendar-header">
+          <button type="button" id="calendar-prev" class="calendar-nav-btn">&lt;</button>
+          <div id="calendar-month-label" class="calendar-month-label">Month YYYY</div>
+          <button type="button" id="calendar-next" class="calendar-nav-btn">&gt;</button>
+        </div>
+        <div class="calendar-weekdays">
+          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div>
+          <div>Fri</div><div>Sat</div><div>Sun</div>
+        </div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- CREATE TASK MODAL -->
+  <div id="create-task-modal" class="dialog-backdrop hidden" aria-hidden="true">
+    <div class="dialog-panel">
+      <div class="dialog-header">
+        <h2>Create a new task</h2>
+        <button
+          id="create-task-close"
+          class="dialog-close-btn"
+          aria-label="Close create task"
+        >
+          &times;
+        </button>
+      </div>
+      <p class="dialog-subtitle">
+        Fill in the details below to schedule and assign a task.
+      </p>
+      <form id="create-task-form">
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="task-title">Title</label>
+            <input
+              id="task-title"
+              name="title"
+              type="text"
+              placeholder="Task title"
+              required
+            />
+          </div>
+
+          <!-- Assignee picker -->
+          <div class="form-field">
+            <label for="task-assignee-select">Assign To</label>
+            <div class="assignee-picker">
+              <div id="assignee-chips" class="assignee-chips"></div>
+              <select
+                id="task-assignee-select"
+                class="assignee-select"
+              ></select>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="task-category">Category</label>
+            <select id="task-category" name="category">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="one-time" selected>One-time</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="task-priority">Priority</label>
+            <select id="task-priority" name="priority">
+              <option value="1">1 - Low</option>
+              <option value="2">2</option>
+              <option value="3" selected>3 - Medium</option>
+              <option value="4">4</option>
+              <option value="5">5 - High</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="task-due">Due date &amp; time</label>
+            <input id="task-due" name="dueAt" type="datetime-local" />
+          </div>
+
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label for="task-description">Description</label>
+            <textarea
+              id="task-description"
+              name="description"
+              placeholder="Describe the task..."
+            ></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="primary-button">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- DELETE TASK MODAL -->
+  <div id="delete-modal" class="dialog-backdrop hidden" aria-hidden="true">
+    <div class="dialog-panel dialog-panel-danger">
+      <div class="dialog-header">
+        <h2>Delete task</h2>
+        <button
+          id="delete-close-btn"
+          class="dialog-close-btn"
+          aria-label="Close delete dialog"
+        >
+          &times;
+        </button>
+      </div>
+      <p class="dialog-subtitle">
+        Are you sure you want to delete this task? This action cannot be undone.
+      </p>
+      <div class="dialog-actions">
+        <button
+          id="delete-cancel-btn"
+          class="secondary-button"
+          type="button"
+        >
+          Cancel
+        </button>
+        <button
+          id="delete-confirm-btn"
+          class="danger-button"
+          type="button"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMMENTS MODAL -->
+  <div id="comments-modal" class="comments-modal hidden" aria-hidden="true">
+    <div class="comments-modal-content">
+      <div class="comments-modal-header">
+        <h3 id="comments-modal-title">Comments</h3>
+        <button
+          id="comments-close-btn"
+          class="comments-close-btn"
+          aria-label="Close comments"
+        >
+          &times;
+        </button>
+      </div>
+      <div id="comments-list" class="comments-list"></div>
+      <form id="comments-form" class="comments-form">
+        <textarea id="comments-input" placeholder="Add a comment..."></textarea>
+        <button type="submit" class="comments-submit-btn">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

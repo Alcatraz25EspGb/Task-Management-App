@@ -1,48 +1,45 @@
 package com.example.tms;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.sql.Statement;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
+import java.util.stream.Collectors;
 
 public class Database {
 
-    private static final String DB_FILE = "taskmanager.db";
-    private static final String DB_URL = "jdbc:sqlite:" + DB_FILE;
+    private static final String DB_URL = "jdbc:sqlite:taskmanager.db";
 
     static {
         try {
-            // Load SQLite JDBC driver
-            Class.forName("org.sqlite.JDBC");
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException("Failed to load SQLite JDBC driver", e);
-        }
-
-        try {
             initDatabase();
-        } catch (IOException | SQLException e) {
+        } catch (Exception e) {
             throw new RuntimeException("Failed to initialize database", e);
-        }
-    }
-
-    private static void initDatabase() throws IOException, SQLException {
-        Path schemaPath = Path.of("database", "schema.sql");
-        if (!Files.exists(schemaPath)) {
-            throw new IOException("schema.sql not found at " + schemaPath.toAbsolutePath());
-        }
-
-        String sql = Files.readString(schemaPath, StandardCharsets.UTF_8);
-
-        try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate(sql);
         }
     }
 
     public static Connection getConnection() throws SQLException {
         return DriverManager.getConnection(DB_URL);
+    }
+
+    private static void initDatabase() throws Exception {
+        // Load schema.sql from resources
+        InputStream inputStream = Database.class.getClassLoader().getResourceAsStream("schema.sql");
+
+        if (inputStream == null) {
+            throw new Exception("schema.sql not found in resources folder!");
+        }
+
+        String schemaSQL;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            schemaSQL = reader.lines().collect(Collectors.joining("\n"));
+        }
+
+        try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate(schemaSQL);
+        }
     }
 }

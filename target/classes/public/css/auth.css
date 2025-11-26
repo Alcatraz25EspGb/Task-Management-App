@@ -1,0 +1,194 @@
+/* Overall background – Figma-like auth page (blue gradient) */
+.auth-body {
+  min-height: 100vh;
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Gradient similar to bg-gradient-to-br from-blue-50 to-indigo-100 */
+  background: linear-gradient(to bottom right, #eff6ff, #e0e7ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Centered card wrapper */
+.auth-wrapper {
+  width: 100%;
+  max-width: 420px;
+  padding: 16px;
+}
+
+/* White rounded card, shadow like <Card> */
+.auth-card {
+  background-color: #ffffff; /* white card on top of gradient */
+  border-radius: 16px;
+  padding: 24px 24px 28px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e5e7eb;
+}
+
+/* Header with icon + title + subtitle */
+.auth-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* Blue circle with white lock inside */
+.auth-icon-circle {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 16px;
+  border-radius: 999px;
+  background-color: #2563eb; /* blue-600 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.35);
+}
+
+/* Simple lock icon drawn in CSS */
+.auth-icon-lock {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.auth-icon-lock-body {
+  position: absolute;
+  bottom: 0;
+  left: 2px;
+  right: 2px;
+  height: 12px;
+  background-color: #ffffff;
+  border-radius: 3px;
+}
+
+.auth-icon-lock-shackle {
+  position: absolute;
+  top: -6px;
+  left: 4px;
+  right: 4px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+  border-bottom-color: transparent;
+}
+
+/* Title and subtitle */
+.auth-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500; /* normal-ish, not super bold */
+  color: #111827;
+}
+
+.auth-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Tabs container */
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background-color: #e5e7eb; /* muted bg behind tabs */
+  border-radius: 8px;
+  padding: 2px;
+  margin-bottom: 16px;
+}
+
+/* Individual tab button */
+.auth-tab {
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  padding: 6px 0;
+  cursor: pointer;
+  color: #4b5563;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Active tab – looks like the Card’s surface */
+.auth-tab.active {
+  background-color: #ffffff;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
+}
+
+/* Forms */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auth-field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.auth-field input,
+.auth-field select {
+  font-size: 14px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.auth-field input:focus,
+.auth-field select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb33;
+  background-color: #ffffff;
+}
+
+/* Primary button */
+.auth-button {
+  margin-top: 4px;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 500;
+  background-color: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+.auth-button:hover {
+  background-color: #1d4ed8;
+  box-shadow: 0 9px 22px rgba(37, 99, 235, 0.4);
+}
+
+.auth-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+}
+
+/* Message under forms */
+.auth-message {
+  margin-top: 8px;
+  min-height: 18px;
+  font-size: 12px;
+  text-align: center;
+  color: #dc2626; /* red-600 for errors */
+}
+
+/* Hidden class reused by auth.js */
+.hidden {
+  display: none;
+}

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Task Management System – Login</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+
+
+  <!-- The existing Figma CSS (even if not fully used) -->
+  <link rel="stylesheet" href="css/globals.css" />
+  <link rel="stylesheet" href="css/index.css" />
+
+  <!-- Our new auth-specific CSS (comes last = overrides) -->
+  <link rel="stylesheet" href="css/auth.css" />
+</head>
+<body class="auth-body">
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <!-- Header: icon + title + subtitle -->
+      <div class="auth-header">
+        <div class="auth-icon-circle">
+          <div class="auth-icon-lock">
+            <div class="auth-icon-lock-body"></div>
+            <div class="auth-icon-lock-shackle"></div>
+          </div>
+        </div>
+        <h1 class="auth-title">Task Management System</h1>
+        <p class="auth-subtitle">Organize and track your team’s tasks</p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button id="login-tab" class="auth-tab active" type="button">
+          Login
+        </button>
+        <button id="register-tab" class="auth-tab" type="button">
+          Register
+        </button>
+      </div>
+
+      <!-- Login form -->
+      <form id="login-form" class="auth-form">
+        <div class="auth-field">
+          <label for="login-username">Username</label>
+          <input
+            id="login-username"
+            type="text"
+            placeholder="Enter your username"
+            required
+          />
+        </div>
+
+        <div class="auth-field">
+          <label for="login-password">Password</label>
+          <input
+            id="login-password"
+            type="password"
+            placeholder="Enter your password"
+            required
+          />
+        </div>
+
+        <button type="submit" class="auth-button">
+          Login
+        </button>
+      </form>
+
+      <!-- Register form -->
+      <form id="register-form" class="auth-form hidden">
+        <div class="auth-field">
+          <label for="register-username">Username</label>
+          <input
+            id="register-username"
+            type="text"
+            placeholder="Choose a username"
+            required
+          />
+        </div>
+
+        <div class="auth-field">
+          <label for="register-email">Email</label>
+          <input
+            id="register-email"
+            type="email"
+            placeholder="Enter your email"
+            required
+          />
+        </div>
+
+        <div class="auth-field">
+          <label for="register-password">Password</label>
+          <input
+            id="register-password"
+            type="password"
+            placeholder="Choose a password"
+            required
+          />
+        </div>
+
+        <div class="auth-field">
+          <label for="register-role">Role</label>
+          <select id="register-role" required>
+            <option value="Manager">Manager</option>
+            <option value="Staff">Staff</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+
+        <button type="submit" class="auth-button">
+          Register
+        </button>
+      </form>
+
+      <p id="auth-message" class="auth-message"></p>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+</body>
+</html>
