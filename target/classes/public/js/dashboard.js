@@ -1111,7 +1111,7 @@ function renderCalendar() {
   const month = calendarState.month;
 
   const firstOfMonth = new Date(year, month, 1);
-  const firstWeekday = (firstOfMonth.getDay() + 6) % 7; // Monday=0
+  const firstWeekday = (firstOfMonth.getDay() + 6) % 7; // Monday = 0
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevMonthDays = new Date(year, month, 0).getDate();
 
@@ -1125,9 +1125,8 @@ function renderCalendar() {
 
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
-  const rangeEnd = new Date(today);
-  rangeEnd.setDate(rangeEnd.getDate() + 14);
 
+  // Calendar visible range (always 6 rows = 42 cells)
   const calendarStart = new Date(year, month, 1);
   calendarStart.setDate(calendarStart.getDate() - firstWeekday);
   const calendarEnd = new Date(calendarStart);
@@ -1138,25 +1137,49 @@ function renderCalendar() {
 
     const base = new Date(String(t.dueAt).replace(" ", "T"));
 
+    // Recurring tasks: daily / weekly / monthly
     if (t.category === "daily" || t.category === "weekly" || t.category === "monthly") {
-      const intervalDays =
-        t.category === "daily" ? 1 : t.category === "weekly" ? 7 : 30;
-
       let occurrence = new Date(base);
-      const start = calendarStart > today ? calendarStart : today;
+      const seriesEnd = new Date(base);
 
-      // Move up to start of visible range
-      while (occurrence < start) {
-        occurrence.setDate(occurrence.getDate() + intervalDays);
+      // Daily: 14-day span from start date (start date + 13 days)
+      if (t.category === "daily") {
+        seriesEnd.setDate(seriesEnd.getDate() + 13);
+      }
+      // Weekly: next 3 months from start date
+      else if (t.category === "weekly") {
+        seriesEnd.setMonth(seriesEnd.getMonth() + 3);
+      }
+      // Monthly: next 6 months from start date
+      else if (t.category === "monthly") {
+        seriesEnd.setMonth(seriesEnd.getMonth() + 6);
       }
 
-      while (occurrence <= rangeEnd && occurrence <= calendarEnd) {
+      // Helper to move to the next occurrence
+      const advance = () => {
+        if (t.category === "daily") {
+          occurrence.setDate(occurrence.getDate() + 1);
+        } else if (t.category === "weekly") {
+          occurrence.setDate(occurrence.getDate() + 7);
+        } else {
+          occurrence.setMonth(occurrence.getMonth() + 1);
+        }
+      };
+
+      // Fast-forward to the first occurrence that might be visible
+      while (occurrence < calendarStart && occurrence <= seriesEnd) {
+        advance();
+      }
+
+      // Add occurrences while they are within the series span AND the current calendar view
+      while (occurrence <= seriesEnd && occurrence <= calendarEnd) {
         const key = occurrence.toISOString().slice(0, 10);
         if (!tasksByDate.has(key)) tasksByDate.set(key, []);
         tasksByDate.get(key).push(t);
-        occurrence.setDate(occurrence.getDate() + intervalDays);
+        advance();
       }
     } else {
+      // One-time task: just drop it on its due date
       const key = String(t.dueAt).slice(0, 10);
       if (!tasksByDate.has(key)) tasksByDate.set(key, []);
       tasksByDate.get(key).push(t);
@@ -1228,7 +1251,6 @@ function renderCalendar() {
     grid.appendChild(dayEl);
   }
 }
-
 // ================================
 // COMMENTS MODAL HELPERS
 // ================================
