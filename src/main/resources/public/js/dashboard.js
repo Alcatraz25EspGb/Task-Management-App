@@ -10,6 +10,7 @@ let calendarState = {
   month: null
 };
 let commentsModalTaskId = null;
+let commentToDeleteId = null;
 
 // Assignee picker state (by username)
 let selectedAssignees = [];
@@ -30,6 +31,9 @@ let createTaskModalEl = null;
 let createTaskFormEl = null;
 let assigneePickerEl = null;
 
+let replyParentId = null;
+let editingCommentId = null;
+
 document.addEventListener("DOMContentLoaded", () => {
   initDashboard();
 });
@@ -48,6 +52,7 @@ async function initDashboard() {
     setupToolbar();
     setupFilters();
     setupCommentsModal();
+    setupCommentDeleteModal();
     setupDeleteModal();
     setupDueDateMin();
     await loadTasks();
@@ -95,11 +100,18 @@ async function loadUserMap() {
     const res = await fetch("/api/users");
     if (!res.ok) return;
     const users = await res.json();
-    allUsers = users;
+
+    allUsers = users || [];
     userMap = {};
-    users.forEach((u) => {
-      userMap[u.id] = u.username;
+
+    allUsers.forEach((u) => {
+      if (u && typeof u.id !== "undefined" && u.username) {
+        userMap[u.id] = u.username;
+      }
     });
+
+    // initial population (will be called again on open create/edit)
+    populateAssigneeSelect();
   } catch (err) {
     console.error("Failed to load user map", err);
   }
@@ -119,33 +131,77 @@ function setupAssigneePicker() {
   select.addEventListener("change", () => {
     const value = select.value;
     if (!value) return;
+
     if (!selectedAssignees.includes(value)) {
       selectedAssignees.push(value);
-      updateAssigneeChips();
-      populateAssigneeSelect();
     }
+
+    updateAssigneeChips();
+    populateAssigneeSelect();
     select.value = "";
   });
 }
 
+/**
+ * Build options for the "Select assignee" dropdown.
+ * Uses userMap (id -> username) primarily, and falls back to users
+ * seen in tasks if needed.
+ */
 function populateAssigneeSelect() {
   const select = document.getElementById("task-assignee-select");
   if (!select) return;
 
+  // Clear previous options
   select.innerHTML = "";
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = "Select assignee";
   select.appendChild(placeholder);
 
-  const remaining = allUsers.filter(
-    (u) => u.id !== currentUser.id && !selectedAssignees.includes(u.username)
+  const candidateUsernames = [];
+
+  // --- PRIMARY SOURCE: userMap (id -> username), which works in list view ---
+  if (userMap && Object.keys(userMap).length > 0) {
+    Object.entries(userMap).forEach(([idStr, username]) => {
+      const id = Number(idStr);
+      if (!id || Number.isNaN(id)) return;
+
+      // Skip the current user as assignee (per your earlier requirement)
+      if (currentUser && id === currentUser.id) return;
+
+      if (username) candidateUsernames.push(username);
+    });
+  }
+
+  // --- FALLBACK: derive usernames from tasks' assigneeId if needed ---
+  if (candidateUsernames.length === 0 && Array.isArray(allTasks) && allTasks.length > 0) {
+    const seen = new Set();
+    allTasks.forEach((t) => {
+      const id = Number(t.assigneeId);
+      if (!id || Number.isNaN(id)) return;
+      if (currentUser && id === currentUser.id) return;
+
+      const username = (userMap && userMap[id]) || `User ${id}`;
+      if (seen.has(username)) return;
+      seen.add(username);
+      candidateUsernames.push(username);
+    });
+  }
+
+  // Remove duplicates + already selected assignees
+  const uniqueNames = [...new Set(candidateUsernames)].filter(
+    (name) => !selectedAssignees.includes(name)
   );
 
-  remaining.forEach((u) => {
+  // If nothing to show, just leave the placeholder
+  if (uniqueNames.length === 0) {
+    return;
+  }
+
+  uniqueNames.forEach((username) => {
     const opt = document.createElement("option");
-    opt.value = u.username;
-    opt.textContent = `${u.username} (${u.role})`;
+    opt.value = username;
+    opt.textContent = username;
     select.appendChild(opt);
   });
 }
@@ -181,6 +237,7 @@ function updateAssigneeChips() {
     chip.appendChild(removeBtn);
     chipsContainer.appendChild(chip);
 
+    // Wrap onto next "line" visually after every 3 chips
     if ((index + 1) % 3 === 0) {
       const br = document.createElement("span");
       br.className = "assignee-chip-break";
@@ -239,7 +296,7 @@ function setupToolbar() {
     });
   }
 
-  // Default: list view
+  // Default view is list
   listBtn.addEventListener("click", () => {
     currentView = "list";
     listBtn.classList.add("active");
@@ -314,12 +371,16 @@ function setupCommentsModal() {
   closeBtn.addEventListener("click", () => {
     modal.classList.add("hidden");
     commentsModalTaskId = null;
+    replyParentId = null;
+    editingCommentId = null;
   });
 
   modal.addEventListener("click", (e) => {
     if (e.target === modal) {
       modal.classList.add("hidden");
       commentsModalTaskId = null;
+      replyParentId = null;
+      editingCommentId = null;
     }
   });
 
@@ -330,19 +391,97 @@ function setupCommentsModal() {
     if (!text || !commentsModalTaskId) return;
 
     try {
-      const res = await fetch(`/api/tasks/${commentsModalTaskId}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
-      });
-      if (res.ok) {
-        input.value = "";
-        await loadCommentsForTask(commentsModalTaskId);
-        await loadCommentCounts();
-        renderTaskList();
+      if (editingCommentId) {
+        // EDIT comment
+        const res = await fetch(`/api/comments/${editingCommentId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        });
+        if (!res.ok) {
+          console.error("Failed to edit comment", await res.text());
+          alert("Could not edit comment.");
+          return;
+        }
+        editingCommentId = null;
+        replyParentId = null;
+      } else {
+        // CREATE comment (or reply if replyParentId is set)
+        const body = { text };
+        if (replyParentId) {
+          body.parentCommentId = replyParentId;
+        }
+        const res = await fetch(`/api/tasks/${commentsModalTaskId}/comments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          console.error("Failed to post comment", await res.text());
+          alert("Could not post comment.");
+          return;
+        }
+        replyParentId = null;
       }
+
+      input.value = "";
+      input.placeholder = "Add a comment...";
+      await loadCommentsForTask(commentsModalTaskId);
+      await loadCommentCounts();
+      renderTaskList();
     } catch (err) {
-      console.error("Failed to post comment", err);
+      console.error("Failed to post/edit comment", err);
+    }
+  });
+}
+
+function setupCommentDeleteModal() {
+  const modal = document.getElementById("comment-delete-modal");
+  if (!modal) return;
+
+  const closeBtn = document.getElementById("comment-delete-close");
+  const cancelBtn = document.getElementById("comment-delete-cancel");
+  const confirmBtn = document.getElementById("comment-delete-confirm");
+
+  const hide = () => {
+    modal.classList.add("hidden");
+    commentToDeleteId = null;
+  };
+
+  closeBtn.addEventListener("click", hide);
+  cancelBtn.addEventListener("click", hide);
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) hide();
+  });
+
+  confirmBtn.addEventListener("click", async () => {
+    if (!commentToDeleteId) return;
+
+    try {
+      const res = await fetch(`/api/comments/${commentToDeleteId}`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok && res.status !== 204) {
+        console.error("Failed to delete comment", await res.text());
+        alert("Could not delete comment.");
+        return;
+      }
+
+      hide();
+
+      // Refresh comments in the open comments modal
+      if (commentsModalTaskId) {
+        await loadCommentsForTask(commentsModalTaskId);
+      }
+
+      // Recompute comment counts & refresh task cards
+      await loadCommentCounts();
+      renderTaskList();
+    } catch (err) {
+      console.error("Error deleting comment", err);
+      alert("Could not delete comment.");
     }
   });
 }
@@ -421,6 +560,7 @@ async function loadTasks() {
     allTasks = tasks;
     await loadCommentCounts();
     recomputeSummary();
+
     if (currentView === "list") {
       renderTaskList();
     } else {
@@ -521,29 +661,87 @@ async function handleCreateOrEditTaskSubmit(form, modal) {
     dueAt = dueAtRaw.replace("T", " ") + ":00";
   }
 
-  // EDIT MODE
+  // ===== EDIT MODE =====
   if (editingTaskId) {
     try {
-      const payload = {
+      const assignees = [...selectedAssignees];
+      if (!assignees.length) {
+        alert("Please select at least one assignee.");
+        return;
+      }
+
+      // Primary username for the original task
+      const primaryUsername = assignees[0];
+
+      // Map username -> id using allUsers first, then userMap as fallback
+      let primaryUserId = null;
+
+      if (Array.isArray(allUsers) && allUsers.length > 0) {
+        const found = allUsers.find((u) => u.username === primaryUsername);
+        if (found) {
+          primaryUserId = found.id;
+        }
+      }
+
+      if (!primaryUserId && userMap && Object.keys(userMap).length > 0) {
+        for (const [idStr, uname] of Object.entries(userMap)) {
+          if (uname === primaryUsername) {
+            primaryUserId = Number(idStr);
+            break;
+          }
+        }
+      }
+
+      if (!primaryUserId) {
+        alert("Primary assignee not found.");
+        return;
+      }
+
+      const updatePayload = {
         title,
         description,
         category,
         priority,
         dueAt,
-        assigneeId: editingTaskAssigneeId,
+        assigneeId: primaryUserId,
         status: editingTaskStatus
       };
 
       const res = await fetch(`/api/tasks/${editingTaskId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(updatePayload)
       });
 
       if (!res.ok) {
         console.error("Failed to update task", res.status, await res.text());
         alert("Failed to update task.");
         return;
+      }
+
+      // Extra assignees: cloned tasks
+      const extraAssignees = assignees.slice(1);
+      for (const username of extraAssignees) {
+        const clonePayload = {
+          title,
+          description,
+          category,
+          priority,
+          dueAt,
+          assigneeUsername: username
+        };
+        const cloneRes = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(clonePayload)
+        });
+        if (!cloneRes.ok) {
+          console.error(
+            "Failed to create extra task for",
+            username,
+            await cloneRes.text()
+          );
+        }
       }
 
       editingTaskId = null;
@@ -565,7 +763,7 @@ async function handleCreateOrEditTaskSubmit(form, modal) {
     }
   }
 
-  // CREATE MODE
+  // ===== CREATE MODE =====
   const assignees = [...selectedAssignees];
   if (!assignees.length) {
     alert("Please select at least one assignee.");
@@ -725,7 +923,7 @@ function renderTaskList() {
     // Manager/Admin actions
     if (currentUser.role === "Manager" || currentUser.role === "Admin") {
       const completeLabel =
-        t.status === "DONE" ? "Mark in progress" : "Mark complete";
+        t.status === "DONE" ? "Mark In Progress" : "Mark complete";
       actionsHtml += `<button class="task-action-btn" data-action="complete" data-task-id="${t.id}">${completeLabel}</button>`;
       actionsHtml += `<button class="task-action-icon" data-action="edit" data-task-id="${t.id}" title="Edit task">✏️</button>`;
       actionsHtml += `<button class="task-action-icon task-delete-btn" data-action="delete" data-task-id="${t.id}" title="Delete task">🗑️</button>`;
@@ -854,23 +1052,40 @@ async function handleTaskAction(action, taskId) {
       editingTaskAssigneeId = t.assigneeId;
       editingTaskStatus = t.status;
 
+      // Title / description / category / priority / due date
       createTaskFormEl.querySelector("#task-title").value = t.title || "";
-      createTaskFormEl.querySelector("#task-description").value =
-        t.description || "";
-      createTaskFormEl.querySelector("#task-category").value =
-        t.category || "one-time";
-      createTaskFormEl.querySelector("#task-priority").value =
-        String(t.priority || 3);
+      createTaskFormEl.querySelector("#task-description").value = t.description || "";
+      createTaskFormEl.querySelector("#task-category").value = t.category || "one-time";
+      createTaskFormEl.querySelector("#task-priority").value = String(t.priority || 3);
 
       const dueInput = createTaskFormEl.querySelector("#task-due");
-      if (t.dueAt && t.dueAt.length >= 16) {
+      if (t.dueAt && String(t.dueAt).length >= 16) {
         const parts = String(t.dueAt).slice(0, 16).replace(" ", "T");
         dueInput.value = parts;
       } else {
         dueInput.value = "";
       }
 
-      if (assigneePickerEl) assigneePickerEl.classList.add("hidden");
+      // ASSIGNEE: pre-fill the chips with the current assignee username
+      if (assigneePickerEl) {
+        assigneePickerEl.classList.remove("hidden");
+      }
+
+      let currentUsername = "";
+      if (t.assigneeId) {
+        if (userMap[t.assigneeId]) {
+          currentUsername = userMap[t.assigneeId];
+        } else if (Array.isArray(allUsers) && allUsers.length > 0) {
+          const found = allUsers.find((u) => Number(u.id) === Number(t.assigneeId));
+          if (found) {
+            currentUsername = found.username;
+          }
+        }
+      }
+
+      selectedAssignees = currentUsername ? [currentUsername] : [];
+      updateAssigneeChips();
+      populateAssigneeSelect();
 
       createTaskModalEl.classList.remove("hidden");
       return;
@@ -1041,15 +1256,64 @@ async function loadCommentsForTask(taskId) {
       listEl.innerHTML = `<div class="comments-empty">No comments yet. Be the first to comment.</div>`;
       return;
     }
+
     comments.forEach((c) => {
       const item = document.createElement("div");
       item.className = "comment-item";
+      item.dataset.commentId = c.id;
+
+      const canEdit = c.userId === currentUser.id;
+      const canDelete =
+        canEdit ||
+        currentUser.role === "Manager" ||
+        currentUser.role === "Admin";
+
       item.innerHTML = `
         <div class="comment-meta">
           <span>User ${c.userId}</span> • <span>${c.createdAt}</span>
         </div>
         <div class="comment-text">${escapeHtml(c.text)}</div>
+        <div class="comment-actions">
+          <button class="comment-reply-btn" data-comment-id="${c.id}" data-comment-user="${c.userId}">Reply</button>
+          ${canEdit ? `<button class="comment-edit-btn" data-comment-id="${c.id}">Edit</button>` : ""}
+          ${canDelete ? `<button class="comment-delete-btn" data-comment-id="${c.id}">Delete</button>` : ""}
+        </div>
       `;
+
+      // Wire buttons
+      const input = document.getElementById("comments-input");
+
+      const replyBtn = item.querySelector(".comment-reply-btn");
+      replyBtn.addEventListener("click", () => {
+        replyParentId = c.id;
+        editingCommentId = null;
+        input.value = "";
+        input.placeholder = "Reply to this comment...";
+        input.focus();
+      });
+
+      const editBtn = item.querySelector(".comment-edit-btn");
+      if (editBtn) {
+        editBtn.addEventListener("click", () => {
+          editingCommentId = c.id;
+          replyParentId = null;
+          input.value = c.text;
+          input.placeholder = "Edit your comment...";
+          input.focus();
+          input.select();
+        });
+      }
+
+      const deleteBtn = item.querySelector(".comment-delete-btn");
+      if (deleteBtn) {
+        deleteBtn.addEventListener("click", () => {
+          commentToDeleteId = c.id;
+          document
+            .getElementById("comment-delete-modal")
+            .classList.remove("hidden");
+        });
+      }
+
       listEl.appendChild(item);
     });
   } catch (err) {

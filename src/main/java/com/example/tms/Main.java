@@ -191,9 +191,30 @@ public class Main {
         // ---------------------------------------------
 
         // Get all tasks
+        // Get tasks (Staff only sees their own, Manager/Admin see all)
         get("/api/tasks", (req, res) -> {
+            Integer userId = req.session().attribute("userId");
+            if (userId == null) {
+                res.status(401);
+                return gson.toJson(new ErrorResponse("Not logged in"));
+            }
+
             try {
-                List<Task> tasks = taskDAO.findAll();
+                User currentUser = userDAO.findById(userId);
+                if (currentUser == null) {
+                    res.status(401);
+                    return gson.toJson(new ErrorResponse("User not found"));
+                }
+
+                List<Task> tasks;
+                if (currentUser.getRole() == UserRole.Staff) {
+                    // Only tasks where user is an assignee
+                    tasks = taskDAO.findByAssignee(userId);
+                } else {
+                    // Manager / Admin see all
+                    tasks = taskDAO.findAll();
+                }
+
                 return gson.toJson(tasks);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -338,7 +359,15 @@ public class Main {
                     existing.setPriority(body.getPriority());
                 }
                 existing.setDueAt(body.getDueAt());
+
+                // ✅ multi-assignee support: copy list if present
+                if (body.getAssigneeIds() != null && !body.getAssigneeIds().isEmpty()) {
+                    existing.setAssigneeIds(body.getAssigneeIds());
+                }
+
+                // still keep primary assignee in sync if client sends it
                 existing.setAssigneeId(body.getAssigneeId());
+
                 if (body.getStatus() != null) {
                     existing.setStatus(body.getStatus());
                 }
@@ -421,7 +450,11 @@ public class Main {
             }
         });
 
-        // Staff submit task for review
+        // ---------------------------------------------
+        // TASK SUBMIT / APPROVE / DENY
+        // ---------------------------------------------
+
+        // Staff submits task for review
         patch("/api/tasks/:id/submit", (req, res) -> {
             Integer userId = req.session().attribute("userId");
             if (userId == null) {
@@ -431,32 +464,36 @@ public class Main {
 
             try {
                 int id = Integer.parseInt(req.params(":id"));
-                Task existing = taskDAO.findById(id);
-                if (existing == null) {
+                Task task = taskDAO.findById(id);
+                if (task == null) {
                     res.status(404);
                     return gson.toJson(new ErrorResponse("Task not found"));
                 }
 
                 User currentUser = userDAO.findById(userId);
-                if (currentUser.getRole() != UserRole.Staff || existing.getAssigneeId() != userId) {
+                // must be staff and assignee
+                if (currentUser.getRole() != UserRole.Staff || task.getAssigneeId() != userId) {
                     res.status(403);
                     return gson.toJson(new ErrorResponse("Only assigned staff can submit tasks for review"));
                 }
 
-                if (existing.isPendingReview()) {
+                if (task.isPendingReview()) {
                     res.status(400);
                     return gson.toJson(new ErrorResponse("Task is already pending review"));
                 }
 
-                existing.setPendingReview(true);
-                Task updated = taskDAO.update(existing);
+                task.setPendingReview(true);
+                Task updated = taskDAO.update(task);
 
-                notificationDAO.create(
-                    updated.getCreatedByUserId(),
-                    updated.getId(),
-                    "review-requested",
-                    "Task submitted for review: " + updated.getTitle()
-                );
+                // notify creator (if different)
+                if (updated.getCreatedByUserId() != userId) {
+                    notificationDAO.create(
+                        updated.getCreatedByUserId(),
+                        updated.getId(),
+                        "review-requested",
+                        "Task submitted for review: " + updated.getTitle()
+                    );
+                }
 
                 return gson.toJson(updated);
             } catch (NumberFormatException e) {
@@ -469,7 +506,7 @@ public class Main {
             }
         });
 
-        // Manager/Admin approve task
+        // Manager/Admin approves a submitted task
         patch("/api/tasks/:id/approve", (req, res) -> {
             Integer userId = req.session().attribute("userId");
             if (userId == null) {
@@ -479,38 +516,49 @@ public class Main {
 
             try {
                 int id = Integer.parseInt(req.params(":id"));
-                Task existing = taskDAO.findById(id);
-                if (existing == null) {
+                Task task = taskDAO.findById(id);
+                if (task == null) {
                     res.status(404);
                     return gson.toJson(new ErrorResponse("Task not found"));
                 }
 
                 User currentUser = userDAO.findById(userId);
-                boolean isOwner = existing.getCreatedByUserId() == userId;
-                boolean isManager = currentUser.getRole() == UserRole.Manager || currentUser.getRole() == UserRole.Admin;
+                boolean isManager = currentUser.getRole() == UserRole.Manager
+                        || currentUser.getRole() == UserRole.Admin;
 
-                if (!isOwner && !isManager) {
+                if (!isManager) {
                     res.status(403);
                     return gson.toJson(new ErrorResponse("Forbidden"));
                 }
 
-                existing.setPendingReview(false);
-                Task updated = taskDAO.updateStatus(
-                    id,
-                    TaskStatus.DONE,
-                    java.time.LocalDateTime.now().toString()
-                );
+                // Clear pendingReview, set DONE, set completedAt
+                task.setPendingReview(false);
+                task.setStatus(TaskStatus.DONE);
+                String completedAt = java.time.LocalDateTime.now().toString();
+                task.setCompletedAt(completedAt);
+                taskDAO.update(task);
 
-                if (updated.getAssigneeId() != 0) {
+                // Notify assignee
+                if (task.getAssigneeId() != 0) {
                     notificationDAO.create(
-                        updated.getAssigneeId(),
-                        updated.getId(),
-                        "review-approved",
-                        "Your submitted task was approved: " + updated.getTitle()
+                        task.getAssigneeId(),
+                        task.getId(),
+                        "approved",
+                        "Your task was approved: " + task.getTitle()
                     );
                 }
 
-                return gson.toJson(updated);
+                // Notify creator (if different from approver)
+                if (task.getCreatedByUserId() != userId) {
+                    notificationDAO.create(
+                        task.getCreatedByUserId(),
+                        task.getId(),
+                        "approved",
+                        "Task approved: " + task.getTitle()
+                    );
+                }
+
+                return gson.toJson(task);
             } catch (NumberFormatException e) {
                 res.status(400);
                 return gson.toJson(new ErrorResponse("Invalid task ID"));
@@ -521,7 +569,7 @@ public class Main {
             }
         });
 
-        // Manager/Admin deny task
+        // Manager/Admin denies a submitted task
         patch("/api/tasks/:id/deny", (req, res) -> {
             Integer userId = req.session().attribute("userId");
             if (userId == null) {
@@ -531,34 +579,46 @@ public class Main {
 
             try {
                 int id = Integer.parseInt(req.params(":id"));
-                Task existing = taskDAO.findById(id);
-                if (existing == null) {
+                Task task = taskDAO.findById(id);
+                if (task == null) {
                     res.status(404);
                     return gson.toJson(new ErrorResponse("Task not found"));
                 }
 
                 User currentUser = userDAO.findById(userId);
-                boolean isOwner = existing.getCreatedByUserId() == userId;
-                boolean isManager = currentUser.getRole() == UserRole.Manager || currentUser.getRole() == UserRole.Admin;
+                boolean isManager = currentUser.getRole() == UserRole.Manager
+                        || currentUser.getRole() == UserRole.Admin;
 
-                if (!isOwner && !isManager) {
+                if (!isManager) {
                     res.status(403);
                     return gson.toJson(new ErrorResponse("Forbidden"));
                 }
 
-                existing.setPendingReview(false);
-                Task updated = taskDAO.update(existing);
+                // Clear pendingReview, keep current status
+                task.setPendingReview(false);
+                taskDAO.update(task);
 
-                if (updated.getAssigneeId() != 0) {
+                // Notify assignee
+                if (task.getAssigneeId() != 0) {
                     notificationDAO.create(
-                        updated.getAssigneeId(),
-                        updated.getId(),
-                        "review-denied",
-                        "Your submitted task was not approved: " + updated.getTitle()
+                        task.getAssigneeId(),
+                        task.getId(),
+                        "denied",
+                        "Your task submission was denied: " + task.getTitle()
                     );
                 }
 
-                return gson.toJson(updated);
+                // Notify creator (if different)
+                if (task.getCreatedByUserId() != userId) {
+                    notificationDAO.create(
+                        task.getCreatedByUserId(),
+                        task.getId(),
+                        "denied",
+                        "Task submission was denied: " + task.getTitle()
+                    );
+                }
+
+                return gson.toJson(task);
             } catch (NumberFormatException e) {
                 res.status(400);
                 return gson.toJson(new ErrorResponse("Invalid task ID"));
@@ -677,6 +737,50 @@ public class Main {
             } catch (NumberFormatException e) {
                 res.status(400);
                 return gson.toJson(new ErrorResponse("Invalid task ID"));
+            } catch (Exception e) {
+                e.printStackTrace();
+                res.status(500);
+                return gson.toJson(new ErrorResponse("Server error"));
+            }
+        });
+
+        // Delete a comment (owner OR Manager/Admin)
+        delete("/api/comments/:id", (req, res) -> {
+            Integer userId = req.session().attribute("userId");
+            if (userId == null) {
+                res.status(401);
+                return gson.toJson(new ErrorResponse("Not logged in"));
+            }
+
+            try {
+                int commentId = Integer.parseInt(req.params(":id"));
+                Comment comment = commentDAO.findById(commentId);
+                if (comment == null) {
+                    res.status(404);
+                    return gson.toJson(new ErrorResponse("Comment not found"));
+                }
+
+                User currentUser = userDAO.findById(userId);
+                boolean isOwner = comment.getUserId() == userId;
+                boolean isManager = currentUser.getRole() == UserRole.Manager
+                        || currentUser.getRole() == UserRole.Admin;
+
+                if (!isOwner && !isManager) {
+                    res.status(403);
+                    return gson.toJson(new ErrorResponse("Forbidden"));
+                }
+
+                boolean deleted = commentDAO.delete(commentId);
+                if (!deleted) {
+                    res.status(500);
+                    return gson.toJson(new ErrorResponse("Could not delete comment"));
+                }
+
+                res.status(204);
+                return "";
+            } catch (NumberFormatException e) {
+                res.status(400);
+                return gson.toJson(new ErrorResponse("Invalid comment ID"));
             } catch (Exception e) {
                 e.printStackTrace();
                 res.status(500);

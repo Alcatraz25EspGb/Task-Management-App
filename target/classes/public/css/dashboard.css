@@ -912,7 +912,7 @@ body.dashboard-body {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  z-index: 180;
+  z-index: 300;
 }
 
 .dialog-panel {
@@ -1181,6 +1181,29 @@ body.dashboard-body {
 
 .comments-submit-btn:hover {
   background-color: #1d4ed8;
+}
+
+.comment-actions {
+  margin-top: 0.35rem;
+  display: flex;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.comment-actions button {
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  padding: 0.15rem 0.6rem;
+  cursor: pointer;
+}
+
+.comment-actions button:hover {
+  background: #f3f4f6;
+}
+
+.comment-item.highlight {
+  box-shadow: 0 0 0 2px #2563eb;
 }
 
 /* Utility */
